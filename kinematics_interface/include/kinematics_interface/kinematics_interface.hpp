@@ -89,6 +89,23 @@ public:
   virtual bool calculate_jacobian(
     const Eigen::VectorXd & joint_pos, const std::string & link_name,
     Eigen::Matrix<double, 6, Eigen::Dynamic> & jacobian) = 0;
+  /**
+   * \brief Adds a link to the chain.
+   * \param[in] link_name Name of the new link.
+   * \param[in] parent_link_name Name of the parent link to which the new link will be attached.
+   * \param[in] transform Transformation from the parent link to the new link.
+   * \return True if successful, false otherwise.
+   */
+  virtual bool add_link_to_chain(
+    const std::string & link_name, const std::string & parent_link_name,
+    const Eigen::Isometry3d & transform) = 0;
+
+  /**
+   * \brief Removes additional link from the chain.
+   * \param[in] link_name Name of the link to be removed.
+   * \return True if successful, false otherwise.
+   */
+  virtual bool remove_link_from_chain(const std::string & link_name) = 0;
 
   bool convert_cartesian_deltas_to_joint_deltas(
     std::vector<double> & joint_pos_vec, const std::vector<double> & delta_x_vec,

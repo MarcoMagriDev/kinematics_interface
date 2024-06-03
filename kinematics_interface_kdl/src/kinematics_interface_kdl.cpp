@@ -231,6 +231,95 @@ bool KinematicsInterfaceKDL::verify_jacobian(
   return true;
 }
 
+bool KinematicsInterfaceKDL::remove_link_from_chain(const std::string & link_name)
+{
+  // Check if the link exists in the additional_link_name_map_
+  auto it = additional_link_name_map_.find(link_name);
+  if (it == additional_link_name_map_.end())
+  {
+    return false;  // Link does not exist
+  }
+
+  // Remove the segment corresponding to the link_name from the chain
+  KDL::Chain new_chain;
+  for (unsigned int i = 0; i < chain_.getNrOfSegments(); ++i)
+  {
+    if (i != it->second)
+    {
+      new_chain.addSegment(chain_.getSegment(i));
+    }
+    else if (i == it->second + 1)
+    {
+      auto segment = chain_.getSegment(i);
+      segment.setFrameToTip(
+        chain_.getSegment(it->second).getFrameToTip() * segment.getFrameToTip());
+      new_chain.addSegment(segment);
+    }
+  }
+
+  // Replace the old chain with the new chain
+  chain_ = new_chain;
+
+  // Remove the link name from the maps
+  additional_link_name_map_.erase(it);
+  link_name_map_.erase(link_name);
+
+  // Reinitialize solvers with the updated chain
+  fk_pos_solver_->updateInternalDataStructures();
+  jac_solver_->updateInternalDataStructures();
+
+  return true;
+}
+
+bool KinematicsInterfaceKDL::add_link_to_chain(
+  const std::string & link_name, const std::string & parent_link_name,
+  const Eigen::Isometry3d & transform)
+{
+  if (!verify_initialized() || !verify_link_name(parent_link_name))
+  {
+    return false;
+  }
+
+  if (link_name_map_.find(link_name) != link_name_map_.end())
+  {
+    if (additional_link_name_map_.find(link_name) != additional_link_name_map_.end())
+    {
+      remove_link_from_chain(link_name);
+    }
+    else
+    {
+      RCLCPP_ERROR_STREAM(
+        LOGGER, "Link " << link_name
+                        << " cannot be added. Link with the same name exists in the default chain");
+      // Cannot remove chain native joints
+      return false;
+    }
+  }
+
+  KDL::Frame parent_to_base;
+  fk_pos_solver_->JntToCart(q_, parent_to_base, link_name_map_[parent_link_name]);
+  KDL::Frame end_to_base;
+  fk_pos_solver_->JntToCart(q_, end_to_base, chain_.getNrOfSegments());
+
+  // Convert Eigen::Isometry3d to KDL::Frame
+  KDL::Frame new_to_parent;
+  tf2::transformEigenToKDL(transform, new_to_parent);
+
+  // Add "eef" segment to the chain
+  chain_.addSegment(KDL::Segment(
+    link_name, KDL::Joint(KDL::Joint::None),
+    (end_to_base.Inverse() * parent_to_base) * new_to_parent));
+
+  // Update link name map
+  link_name_map_[link_name] = chain_.getNrOfSegments();
+  additional_link_name_map_[link_name] = chain_.getNrOfSegments();
+
+  // Reinitialize solvers with the updated chain
+  fk_pos_solver_->updateInternalDataStructures();
+  jac_solver_->updateInternalDataStructures();
+  return true;
+}
+
 }  // namespace kinematics_interface_kdl
 
 #include "pluginlib/class_list_macros.hpp"

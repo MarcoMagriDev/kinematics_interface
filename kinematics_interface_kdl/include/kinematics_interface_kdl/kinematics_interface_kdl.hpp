@@ -59,6 +59,12 @@ public:
     const Eigen::VectorXd & joint_pos, const std::string & link_name,
     Eigen::Matrix<double, 6, Eigen::Dynamic> & jacobian) override;
 
+  bool add_link_to_chain(
+    const std::string & link_name, const std::string & parent_link_name,
+    const Eigen::Isometry3d & transform) override;
+
+  bool remove_link_from_chain(const std::string & link_name) override;
+
 private:
   // verification methods
   bool verify_initialized();
@@ -77,6 +83,7 @@ private:
   std::shared_ptr<KDL::ChainJntToJacSolver> jac_solver_;
   std::shared_ptr<rclcpp::node_interfaces::NodeParametersInterface> parameters_interface_;
   std::unordered_map<std::string, int> link_name_map_;
+  std::unordered_map<std::string, int> additional_link_name_map_;
   double alpha;  // damping term for Jacobian inverse
   Eigen::MatrixXd I;
 };
